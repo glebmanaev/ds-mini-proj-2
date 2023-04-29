@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+service ChainReplicator {
+    rpc CreateChain(CreateChainRequest) returns (CreateChainResponse) {}
+}
+
+message Data {
+    string data = 1;
+}
+
+message ChainItem {
+    int32 id = 1;
+    Data data = 2;
+}
+
+message CreateChainRequest {
+    ChainItem head = 1;
+    ChainItem tail = 2;
+}
+
+message CreateChainResponse {
+    bool success = 1;
+    string message = 2;
+}
