@@ -2,9 +2,15 @@ import grpc
 import bookstore_pb2
 import bookstore_pb2_grpc
 
+import pickle
+from sklearn.ensemble import RandomForestRegressor
+
 def run():
     with grpc.insecure_channel("localhost:50055") as channel:
         stub = bookstore_pb2_grpc.BookStoreStub(channel)
+
+        price_model = pickle.load(open("ml-price-predicting-model.pkl", "rb"))
+        genres_to_onehot = {"biography": [1,0,0,0], "education": [0,1,0,0], "fiction": [0,0,1,0], "non-fiction": [0,0,0,1]}
 
         while True:
             command = input("Enter a command: ").strip()
@@ -42,6 +48,17 @@ def run():
                     print("Invalid price value")
                     continue
                 book_name = " ".join(parts[1:-1])
+                response = stub.WriteOperation(bookstore_pb2.WriteOperationRequest(book_name=book_name, price=price))
+                print(f"{response.book_name} = {response.price} EUR")
+
+            elif parts[0] == "Write-ml":
+                if len(parts) < 5:
+                    print("Usage: Write-operation <book_name> <year> <pages> <genre>")
+                    continue
+                book_name = " ".join(parts[1:-3])
+                ml_input = [int(parts[-3]), int(parts[-2])] + genres_to_onehot[parts[-1].lower()]
+                price = price_model.predict([ml_input])[0]
+                price = round(price, 2)
                 response = stub.WriteOperation(bookstore_pb2.WriteOperationRequest(book_name=book_name, price=price))
                 print(f"{response.book_name} = {response.price} EUR")
 
