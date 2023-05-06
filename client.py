@@ -2,16 +2,33 @@ import grpc
 import bookstore_pb2
 import bookstore_pb2_grpc
 
-import pickle
-from sklearn.ensemble import RandomForestRegressor
+import openai
+
+def generate_book_name(keyword):
+    prompt = (f"Generate a book name based on the keyword '{keyword}'. Name:")
+
+    # Generate book name with GPT-3
+    # If book name is too short or too long, try again
+    book_name = [0]*51
+    while len(book_name) < 5 or len(book_name) > 50:
+        response = openai.Completion.create(
+            engine="text-davinci-002",
+            prompt=prompt,
+            max_tokens=50,
+            n=1,
+            stop=None,
+            temperature=0.5,
+        )
+        book_name = response.choices[0].text.strip()
+
+    return book_name
 
 def run():
+    # Set up OpenAI API credentials
+    openai.api_key = "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"
+
     with grpc.insecure_channel("localhost:50055") as channel:
         stub = bookstore_pb2_grpc.BookStoreStub(channel)
-
-        price_model = pickle.load(open("ml-price-predicting-model.pkl", "rb"))
-        genres_to_onehot = {"biography": [1,0,0,0], "education": [0,1,0,0], "fiction": [0,0,1,0], "non-fiction": [0,0,0,1]}
-
         while True:
             command = input("Enter a command: ").strip()
             if not command:
@@ -51,16 +68,15 @@ def run():
                 response = stub.WriteOperation(bookstore_pb2.WriteOperationRequest(book_name=book_name, price=price))
                 print(f"{response.book_name} = {response.price} EUR")
 
-            elif parts[0] == "Write-ml":
-                if len(parts) < 5:
-                    print("Usage: Write-ml <book_name> <year> <pages> <genre>")
+            elif parts[0] == "ML-list-recommend":
+                if len(parts) < 2:
+                    print("Usage: ML-list-recommend <keyword/part of the name/etc>")
                     continue
-                book_name = " ".join(parts[1:-3])
-                ml_input = [int(parts[-3]), int(parts[-2])] + genres_to_onehot[parts[-1].lower()]
-                price = price_model.predict([ml_input])[0]
-                price = round(price, 2)
-                response = stub.WriteOperation(bookstore_pb2.WriteOperationRequest(book_name=book_name, price=price))
-                print(f"{response.book_name} = {response.price} EUR")
+                keywords = " ".join(parts[1:])
+                book_name = generate_book_name(keywords)
+                print(f"I suggest you: {book_name}")
+
+                
 
             elif parts[0] == "List-books":
                 response = stub.ListBooks(bookstore_pb2.ListBooksRequest())
