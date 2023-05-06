@@ -15,3 +15,5 @@ I suggest you: Melody Lady and the Quest for the Perfect Song
 ```
 
 It generates input based on `"Generate a book name based on the keyword '{keyword}'. Name:"` query. Sometimes the result is too short or too long, so we are regenerationg the response until it has [5,50] symbols length.
+
+* You can get your OpenAI API key [on their website](https://openai.com/product#made-for-developers).
