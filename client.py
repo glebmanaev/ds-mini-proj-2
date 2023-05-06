@@ -53,7 +53,7 @@ def run():
 
             elif parts[0] == "Write-ml":
                 if len(parts) < 5:
-                    print("Usage: Write-operation <book_name> <year> <pages> <genre>")
+                    print("Usage: Write-ml <book_name> <year> <pages> <genre>")
                     continue
                 book_name = " ".join(parts[1:-3])
                 ml_input = [int(parts[-3]), int(parts[-2])] + genres_to_onehot[parts[-1].lower()]
