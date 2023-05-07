@@ -1,24 +1,102 @@
 syntax = "proto3";
 
-service ChainReplicator {
-    rpc CreateChain(CreateChainRequest) returns (CreateChainResponse) {}
+package bookstore;
+
+service BookStore {
+  rpc LocalStorePs(LocalStorePsRequest) returns (LocalStorePsResponse);
+  rpc CreateChain(CreateChainRequest) returns (CreateChainResponse);
+  rpc ListChain(ListChainRequest) returns (ListChainResponse);
+  rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
+  rpc ListBooks(ListBooksRequest) returns (ListBooksResponse);
+  rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
+  rpc SetTimeout(SetTimeoutRequest) returns (SetTimeoutResponse);
+  rpc DataStatus(DataStatusRequest) returns (DataStatusResponse);
+  rpc RemoveHead(RemoveHeadRequest) returns (RemoveHeadResponse);
+  rpc RestoreHead(RestoreHeadRequest) returns (RestoreHeadResponse);
 }
 
-message Data {
-    string data = 1;
+message LocalStorePsRequest {
+  uint32 k = 1;
 }
 
-message ChainItem {
-    int32 id = 1;
-    Data data = 2;
+message LocalStorePsResponse {
+  string message = 1;
 }
 
 message CreateChainRequest {
-    ChainItem head = 1;
-    ChainItem tail = 2;
 }
 
 message CreateChainResponse {
-    bool success = 1;
-    string message = 2;
+  string message = 1;
+}
+
+message ListChainRequest {
+}
+
+message ListChainResponse {
+  string chain = 1;
+}
+
+message WriteOperationRequest {
+  string book_name = 1;
+  double price = 2;
+}
+
+message WriteOperationResponse {
+  string book_name = 1;
+  double price = 2;
+}
+
+message ListBooksRequest {
+}
+
+message ListBooksResponse {
+  repeated Book books = 1;
+}
+
+message Book {
+  string name = 1;
+  double price = 2;
+}
+
+message ReadOperationRequest {
+  string book_name = 1;
+}
+
+message ReadOperationResponse {
+  double price = 1;
+}
+
+message SetTimeoutRequest {
+  uint32 timeout = 1;
+}
+
+message SetTimeoutResponse {
+  string message = 1;
+}
+
+message DataStatusRequest {
+}
+
+message DataStatusResponse {
+  repeated DataItemStatus data_items = 1;
+}
+
+message DataItemStatus {
+  string name = 1;
+  bool is_dirty = 2;
+}
+
+message RemoveHeadRequest {
+}
+
+message RemoveHeadResponse {
+  string chain = 1;
+}
+
+message RestoreHeadRequest {
+}
+
+message RestoreHeadResponse {
+  string message = 1;
 }
