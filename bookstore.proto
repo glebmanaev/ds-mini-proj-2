@@ -8,12 +8,16 @@ service DataStore {
   rpc DeclareHead(DeclareHeadRequest) returns (DeclareHeadResponse);
   rpc DeclareTail(DeclareTailRequest) returns (DeclareTailResponse);
   rpc UnsetHead(UnsetHeadRequest) returns (UnsetHeadResponse);
+  rpc UnsetTail(UnsetHeadRequest) returns (UnsetHeadResponse);
+  rpc DeleteData(DeleteDataRequest) returns (DeleteDataResponse);
+  rpc ConfirmWrite(ConfirmWriteRequest) returns (ConfirmWriteResponse);
   rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
   rpc ConfirmTransaction(ConfirmTransactionRequest) returns (ConfirmTransactionResponse);
   rpc ConfirmRead(ConfirmReadRequest) returns (ConfirmReadResponse);
   rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
   rpc ListOperation(ListOperationRequest) returns (ListOperationResponse);
   rpc DataStatus(DataStatusRequest) returns (DataStatusResponse);
+  rpc SetTimeout(SetTimeoutRequest) returns (SetTimeoutResponse);
 }
 
 message SetSuccessorRequest {
@@ -50,6 +54,28 @@ message UnsetHeadRequest {
 }
 
 message UnsetHeadResponse {
+  bool success = 1;
+}
+
+message UnsetTailRequest {
+}
+
+message UnsetTailResponse {
+  bool success = 1;
+}
+
+message DeleteDataRequest {
+}
+
+message DeleteDataResponse {
+  bool success = 1;
+}
+
+message ConfirmWriteRequest {
+  string book_name = 1;
+}
+
+message ConfirmWriteResponse {
   bool success = 1;
 }
 
@@ -102,17 +128,28 @@ message DataStatusResponse {
   repeated string data_status = 1;
 }
 
+message SetTimeoutRequest {
+  uint32 timeout = 1;
+}
+
+message SetTimeoutResponse {
+  bool success = 1;
+}
+
 service BookStore {
   rpc LocalStorePs(LocalStorePsRequest) returns (LocalStorePsResponse);
   rpc CreateChain(CreateChainRequest) returns (CreateChainResponse);
+  rpc RemoveChain(CreateChainRequest) returns (CreateChainResponse);
   rpc ListChain(ListChainRequest) returns (ListChainResponse);
   rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
   rpc ListBooks(ListOperationRequest) returns (ListOperationResponse);
   rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
   rpc SetTimeout(SetTimeoutRequest) returns (SetTimeoutResponse);
   rpc DataStatus(DataStatusRequest) returns (DataStatusResponse);
-  rpc RemoveHead(RemoveHeadRequest) returns (RemoveHeadResponse);
+  rpc RemoveHead(ListChainRequest) returns (ListChainResponse);
   rpc RestoreHead(RestoreHeadRequest) returns (RestoreHeadResponse);
+  rpc GetLocalDataStores(GetLocalDataStoresRequest) returns (GetLocalDataStoresResponse);
+  rpc SetChain(SetChainRequest) returns (SetChainResponse);
 }
 
 
@@ -128,7 +165,8 @@ message CreateChainRequest {
 }
 
 message CreateChainResponse {
-  string message = 1;
+  bool success = 1;
+  string message = 2;
 }
 
 message ListChainRequest {
@@ -150,29 +188,29 @@ message Book {
   double price = 2;
 }
 
-message SetTimeoutRequest {
-  uint32 timeout = 1;
-}
-
-message SetTimeoutResponse {
-  string message = 1;
-}
-
 message DataItemStatus {
   string name = 1;
   bool is_dirty = 2;
-}
-
-message RemoveHeadRequest {
-}
-
-message RemoveHeadResponse {
-  string chain = 1;
 }
 
 message RestoreHeadRequest {
 }
 
 message RestoreHeadResponse {
+  string message = 1;
+}
+
+message GetLocalDataStoresRequest {
+}
+
+message GetLocalDataStoresResponse {
+  repeated int32 data_stores = 1;
+}
+
+message SetChainRequest {
+  repeated int32 chain = 1;
+}
+
+message SetChainResponse {
   string message = 1;
 }

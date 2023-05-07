@@ -4,7 +4,7 @@ import random
 import time
 import bookstore_pb2
 import bookstore_pb2_grpc
-from threading import Thread
+from threading import Timer
 
 class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
     def __init__(self, port):
@@ -57,7 +57,18 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         self.head = False
         return bookstore_pb2.UnsetHeadResponse(success = True)
     
-    #TODO: Implement timeout delay
+    def UnsetTail(self, request, context):
+        self.tail = False
+        return bookstore_pb2.UnsetTailResponse(success = True)
+    
+    def DeleteData(self, request, context):
+        self.data = {}
+        if self.head:
+            self.data_status = {}
+        if not self.tail:
+            return self.successor.DeleteData(request)
+        return bookstore_pb2.DeleteDataResponse(success = True)
+    
     def _propagate_write(self, request):
         try:
             response = self.successor.WriteOperation(request)
@@ -65,29 +76,40 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         except grpc.RpcError:
             print(f"Error propagating update to {self.successor}")
             return False
-    
-    #TODO: Implement timeout delay
-    def WriteOperation(self, request, context):
-        self.data[request.book_name] = request.price
-        success = True
-        if self.head:
-            self.data_status[request.book_name] = "dirty"
-        if not self.tail:
-            success = self._propagate_write(request)
-        if self.tail:
-            print(f"Update to {request.book_name} propagated to tail")
-            try:
-                response = self.successor.ConfirmTransaction(bookstore_pb2.ConfirmTransactionRequest(book_name=request.book_name))
-                success = response.success
-            except grpc.RpcError:
-                print(f"Error confirming transaction with {self.successor}")
-                success = False
         
-        return bookstore_pb2.WriteOperationResponse(book_name=request.book_name, price=request.price, success=success)
+    def ConfirmWrite(self, request, context):
+        if request.book_name in self.data.keys():
+            return bookstore_pb2.ConfirmWriteResponse(success = True)
+        else:
+            return bookstore_pb2.ConfirmWriteResponse(success = False)
+    
+    def WriteOperation(self, request, context):
+        if not self.head:        
+            response = self.head_node.ConfirmWrite(bookstore_pb2.ConfirmWriteRequest(book_name=request.book_name))
+        if self.head or response.success:
+            self.data[request.book_name] = request.price
+            success = True
+            if self.head:
+                self.data_status[request.book_name] = "dirty"
+            if not self.tail:
+                Timer(self.timeout, self._propagate_write, [request]).start()
+            if self.tail:
+                print(f"Update to {request.book_name} propagated to tail")
+                try:
+                    response = self.successor.ConfirmTransaction(bookstore_pb2.ConfirmTransactionRequest(book_name=request.book_name))
+                    success = response.success
+                except grpc.RpcError:
+                    print(f"Error confirming transaction with {self.successor}")
+                    success = False
+            
+            return bookstore_pb2.WriteOperationResponse(book_name=request.book_name, price=request.price, success=success)
+        return bookstore_pb2.WriteOperationResponse(book_name=request.book_name, price=request.price, success=False)
     
     def ConfirmTransaction(self, request, context):
-        self.data_status[request.book_name] = "clean"
-        return bookstore_pb2.ConfirmTransactionResponse(success = True)
+        if request.book_name in self.data.keys():
+            self.data_status[request.book_name] = "clean"
+            return bookstore_pb2.ConfirmTransactionResponse(success = True)
+        return bookstore_pb2.ConfirmTransactionResponse(success = False)
     
     def ConfirmRead(self, request, context):
         if request.book_name in self.data.keys() and self.data_status[request.book_name] == "clean":
@@ -120,6 +142,12 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
             return bookstore_pb2.DataStatusResponse(data_status=[str(key) + " – " + str(value) for key, value in self.data_status.items()])
         else:
             return self.head_node.DataStatus(request)
+        
+    def SetTimeout(self, request, context):
+        self.timeout = request.timeout
+        if not self.tail:
+            return self.successor.SetTimeout(request)
+        return bookstore_pb2.SetTimeoutResponse(success = True)
 
 
 class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
@@ -129,27 +157,51 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
         self.node_id = node_id
         self.other_nodes = other_nodes
         self.data_servers = []
+        self.last_removed_head = None
 
     def LocalStorePs(self, request, context):
-        for i in range(request.k):
-            ps_port = int(f"5{self.node_id:02}{i+1:02}")
+        if not self.local_datastores:
+            for i in range(request.k):
+                ps_port = int(f"5{self.node_id:02}{i+1:02}")
 
-            self.data_servers.append(grpc.server(futures.ThreadPoolExecutor(max_workers=10)))
-            bookstore_pb2_grpc.add_DataStoreServicer_to_server(DataStoreService(ps_port), self.data_servers[-1])
-            self.data_servers[-1].add_insecure_port(f"localhost:{ps_port}")
-            self.data_servers[-1].start()
+                self.data_servers.append(grpc.server(futures.ThreadPoolExecutor(max_workers=10)))
+                bookstore_pb2_grpc.add_DataStoreServicer_to_server(DataStoreService(ps_port), self.data_servers[-1])
+                self.data_servers[-1].add_insecure_port(f"localhost:{ps_port}")
+                self.data_servers[-1].start()
 
-            self.local_datastores.append(ps_port)
+                self.local_datastores.append(ps_port)
 
-        return bookstore_pb2.LocalStorePsResponse(message=f"{request.k} processes created in Node #{self.node_id}")
+            return bookstore_pb2.LocalStorePsResponse(message=f"{request.k} processes created in Node #{self.node_id}")
+        return bookstore_pb2.LocalStorePsResponse(message=f"Node #{self.node_id} already has data store processes")
     
     def GetLocalDataStores(self, request, context):
         return bookstore_pb2.GetLocalDataStoresResponse(data_stores=self.local_datastores)
+    
+    def RemoveChain(self, request, context):
+        with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.DeleteData(bookstore_pb2.DeleteDataRequest())
+            if not response.success:
+                return bookstore_pb2.CreateChainResponse(success=False, message="Error removing chain")
+            else:
+                print("Data deleted successfully")
+
+        with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.UnsetHead(bookstore_pb2.UnsetHeadRequest())
+        
+        with grpc.insecure_channel(f"localhost:{self.chain[-1]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.UnsetTail(bookstore_pb2.UnsetTailRequest())
+        
+        self.chain = []
+
+        return self.CreateChain(request, context)
 
     def CreateChain(self, request, context):
         if self.chain:
             #TODO: Implement chain re-creation
-            return bookstore_pb2.CreateChainResponse(message="Chain already exists. Use RemoveHead to remove the current head.")
+            return bookstore_pb2.CreateChainResponse(success=False, message="Chain already exists. Use RemoveHead to remove the current head.")
         
         datastores = self.local_datastores.copy()
         for node_id in self.other_nodes:
@@ -190,7 +242,7 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
                 stub = bookstore_pb2_grpc.BookStoreStub(channel)
                 response = stub.SetChain(bookstore_pb2.SetChainRequest(chain=self.chain))
 
-        return bookstore_pb2.CreateChainResponse(message="Chain created successfully")
+        return bookstore_pb2.CreateChainResponse(success=True, message="Chain created successfully")
     
     def SetChain(self, request, context):
         self.chain = request.chain
@@ -229,8 +281,12 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
         return response
 
     def SetTimeout(self, request, context):
-        # TODO: Implement SetTimeout
-        return bookstore_pb2.SetTimeoutResponse(message="Timeout set successfully")
+        if not self.chain:
+            return bookstore_pb2.SetTimeoutResponse(success=False)
+        with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.SetTimeout(request)
+        return response
 
     def DataStatus(self, request, context):
         if not self.chain:
@@ -242,26 +298,51 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
 
     def RemoveHead(self, request, context):
         if not self.chain:
-            return bookstore_pb2.RemoveHeadResponse(chain="")
+            return bookstore_pb2.ListChainResponse(chain="")
         if len(self.chain) == 1:
             self.chain = []
         else:
-            new_head = self.data[self.chain[0]]["successor"]
-            del self.data[self.chain[0]]["head"]
-            self.data[new_head]["predecessor"] = None
-            self.chain.pop(0)
-            self.chain[0] = new_head
-        return bookstore_pb2.RemoveHeadResponse(chain=self.ListChain(bookstore_pb2.ListChainRequest(), context).chain)
+            self.last_removed_head = self.chain.pop(0)
+            with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
+                stub = bookstore_pb2_grpc.DataStoreStub(channel)
+                response = stub.DeclareHead(bookstore_pb2.DeclareHeadRequest())
+            with grpc.insecure_channel(f"localhost:{self.chain[-1]}") as channel:
+                stub = bookstore_pb2_grpc.DataStoreStub(channel)
+                response = stub.SetSuccessor(bookstore_pb2.SetSuccessorRequest(successor=self.chain[0]))
+            with grpc.insecure_channel(f"localhost:{self.last_removed_head}") as channel:
+                stub = bookstore_pb2_grpc.DataStoreStub(channel)
+                response = stub.UnsetHead(bookstore_pb2.UnsetHeadRequest())
+            for other_node_id in self.other_nodes:
+                with grpc.insecure_channel(f"localhost:5{other_node_id:02}00") as channel:
+                    stub = bookstore_pb2_grpc.BookStoreStub(channel)
+                    response = stub.SetChain(bookstore_pb2.SetChainRequest(chain=self.chain))
+        return self.ListChain(request, context)
 
     def RestoreHead(self, request, context):
         # TODO: Implement RestoreHead
         return bookstore_pb2.RestoreHeadResponse(message="Head restored successfully")
 
 if __name__ == '__main__':
-    node_id = int(input("Enter node id: "))
-    master_port = int(f"5{node_id:02}00")
-    other_nodes = input("Enter other node ids (comma separated): ")
-    other_nodes = [int(node) for node in other_nodes.split(",")] if other_nodes else []
+    while True:
+        try:
+            node_id = int(input("Enter node id: "))
+            master_port = int(f"5{node_id:02}00")
+            break
+        except KeyboardInterrupt:
+            exit(0)
+        except:
+            print("Invalid node id. Node id must be integer value. Try again.")
+            continue
+    while True:
+        try:
+            other_nodes = input("Enter other node ids (comma separated): ")
+            other_nodes = [int(node) for node in other_nodes.split(",")] if other_nodes else []
+            break
+        except KeyboardInterrupt:
+            exit(0)
+        except:
+            print("Invalid node ids. Node ids must be integer values. Try again.")
+            continue
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     bookstore_pb2_grpc.add_BookStoreServicer_to_server(BookStoreService(node_id, other_nodes), server)
     server.add_insecure_port(f"localhost:{master_port}")
@@ -293,6 +374,14 @@ if __name__ == '__main__':
                     elif parts[0] == "Create-chain":
                         response = stub.CreateChain(bookstore_pb2.CreateChainRequest())
                         print(response.message)
+                        if not response.success:
+                            command = input("Do you wish to re-create chain (all data will be lost) answer yes/no: ").strip()
+                            if command == "yes":
+                                response = stub.RemoveChain(bookstore_pb2.CreateChainRequest())
+                                print(response.message)
+                            elif command != "no":
+                                print("Invalid command, chain not re-created")
+                            
 
                     elif parts[0] == "List-chain":
                         response = stub.ListChain(bookstore_pb2.ListChainRequest())
@@ -328,8 +417,22 @@ if __name__ == '__main__':
                             print(f"{book_name} not yet in stock")
 
                     elif parts[0] == "Set-timeout":
-                        # TODO: Implement Set-timeout command
-                        print("Command not yet implemented")
+                        if len(parts) < 2:
+                            print("Usage: Set-timeout <seconds>")
+                            continue
+                        try:
+                            timeout = int(parts[1])
+                        except ValueError:
+                            print("Invalid value for time")
+                            continue
+                        if timeout < 0:
+                            print("Invalid value for time")
+                            continue
+                        response = stub.SetTimeout(bookstore_pb2.SetTimeoutRequest(timeout=timeout))
+                        if response.success:
+                            print("Timeout set successfully")
+                        else:
+                            print("Timeout could not be set")
 
                     elif parts[0] == "Data-status":
                         response = stub.DataStatus(bookstore_pb2.DataStatusRequest())
@@ -337,7 +440,7 @@ if __name__ == '__main__':
                             print(f"{i+1}) {data_status}")
 
                     elif parts[0] == "Remove-head":
-                        response = stub.RemoveHead(bookstore_pb2.RemoveHeadRequest())
+                        response = stub.RemoveHead(bookstore_pb2.ListChainRequest())
                         print(response.chain)
 
                     elif parts[0] == "Restore-head":
