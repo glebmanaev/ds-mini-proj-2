@@ -2,18 +2,119 @@ syntax = "proto3";
 
 package bookstore;
 
+service DataStore {
+  rpc SetSuccessor(SetSuccessorRequest) returns (SetSuccessorResponse);
+  rpc SetHeadNode(SetHeadNodeRequest) returns (SetHeadNodeResponse);
+  rpc DeclareHead(DeclareHeadRequest) returns (DeclareHeadResponse);
+  rpc DeclareTail(DeclareTailRequest) returns (DeclareTailResponse);
+  rpc UnsetHead(UnsetHeadRequest) returns (UnsetHeadResponse);
+  rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
+  rpc ConfirmTransaction(ConfirmTransactionRequest) returns (ConfirmTransactionResponse);
+  rpc ConfirmRead(ConfirmReadRequest) returns (ConfirmReadResponse);
+  rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
+  rpc ListOperation(ListOperationRequest) returns (ListOperationResponse);
+  rpc DataStatus(DataStatusRequest) returns (DataStatusResponse);
+}
+
+message SetSuccessorRequest {
+  int32 successor = 1;
+}
+
+message SetSuccessorResponse {
+  bool success = 1;
+}
+
+message SetHeadNodeRequest {
+  int32 head_node_port = 1;
+}
+
+message SetHeadNodeResponse {
+  bool success = 1;
+}
+
+message DeclareHeadRequest {
+}
+
+message DeclareHeadResponse {
+  bool success = 1;
+}
+
+message DeclareTailRequest {
+}
+
+message DeclareTailResponse {
+  bool success = 1;
+}
+
+message UnsetHeadRequest {
+}
+
+message UnsetHeadResponse {
+  bool success = 1;
+}
+
+message WriteOperationRequest {
+  string book_name = 1;
+  double price = 2;
+}
+
+message WriteOperationResponse {
+  string book_name = 1;
+  double price = 2;
+  bool success = 3;
+}
+
+message ConfirmTransactionRequest {
+  string book_name = 1;
+}
+
+message ConfirmTransactionResponse {
+  bool success = 1;
+}
+
+message ConfirmReadRequest {
+  string book_name = 1;
+}
+
+message ConfirmReadResponse {
+  bool success = 1;
+}
+
+message ReadOperationRequest {
+  string book_name = 1;
+}
+
+message ReadOperationResponse {
+  double price = 1;
+}
+
+message ListOperationRequest {
+}
+
+message ListOperationResponse {
+  repeated string books = 1;
+}
+
+message DataStatusRequest {
+}
+
+message DataStatusResponse {
+  repeated string data_status = 1;
+}
+
 service BookStore {
   rpc LocalStorePs(LocalStorePsRequest) returns (LocalStorePsResponse);
   rpc CreateChain(CreateChainRequest) returns (CreateChainResponse);
   rpc ListChain(ListChainRequest) returns (ListChainResponse);
   rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
-  rpc ListBooks(ListBooksRequest) returns (ListBooksResponse);
+  rpc ListBooks(ListOperationRequest) returns (ListOperationResponse);
   rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
   rpc SetTimeout(SetTimeoutRequest) returns (SetTimeoutResponse);
   rpc DataStatus(DataStatusRequest) returns (DataStatusResponse);
   rpc RemoveHead(RemoveHeadRequest) returns (RemoveHeadResponse);
   rpc RestoreHead(RestoreHeadRequest) returns (RestoreHeadResponse);
 }
+
 
 message LocalStorePsRequest {
   uint32 k = 1;
@@ -37,16 +138,6 @@ message ListChainResponse {
   string chain = 1;
 }
 
-message WriteOperationRequest {
-  string book_name = 1;
-  double price = 2;
-}
-
-message WriteOperationResponse {
-  string book_name = 1;
-  double price = 2;
-}
-
 message ListBooksRequest {
 }
 
@@ -59,27 +150,12 @@ message Book {
   double price = 2;
 }
 
-message ReadOperationRequest {
-  string book_name = 1;
-}
-
-message ReadOperationResponse {
-  double price = 1;
-}
-
 message SetTimeoutRequest {
   uint32 timeout = 1;
 }
 
 message SetTimeoutResponse {
   string message = 1;
-}
-
-message DataStatusRequest {
-}
-
-message DataStatusResponse {
-  repeated DataItemStatus data_items = 1;
 }
 
 message DataItemStatus {
