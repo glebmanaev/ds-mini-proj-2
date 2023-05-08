@@ -363,6 +363,14 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
             if not response.success: 
                 self.last_removed_head = None 
                 return bookstore_pb2.RestoreHeadResponse(success=False, message="Head could not be restored") 
+            
+        with grpc.insecure_channel(f"localhost:{self.chain[-1]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.SetSuccessor(bookstore_pb2.SetSuccessorRequest(successor=self.last_removed_head))
+        
+        with grpc.insecure_channel(f"localhost:{self.chain[1]}") as channel:
+            stub = bookstore_pb2_grpc.DataStoreStub(channel)
+            response = stub.UnsetHead(bookstore_pb2.UnsetHeadRequest())
         
         self.chain.insert(0, self.last_removed_head) 
         self.last_removed_head = None 
