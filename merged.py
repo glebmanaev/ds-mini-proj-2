@@ -36,12 +36,12 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         self.timeout = 10
         self.head_node = None
         self.data_status = {}
-        print(f"DataStoreService initialized at port {self.port}")
+        #print(f"DataStoreService initialized at port {self.port}")
 
     def SetSuccessor(self, request, context):
         response = bookstore_pb2.SetSuccessorResponse(success = True)
         try:
-            print(f"Connecting to successor at port {request.successor}")
+            #print(f"Connecting to successor at port {request.successor}")
             self.successor = bookstore_pb2_grpc.DataStoreStub(grpc.insecure_channel(f"localhost:{request.successor}"))
         except grpc.RpcError:
             response.success = False
@@ -50,7 +50,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         return response
     
     def SetHeadNode(self, request, context):
-        print(f"Setting head node to {request.head_node_port}")
+        #print(f"Setting head node to {request.head_node_port}")
         response = bookstore_pb2.SetHeadNodeResponse(success = True)
         try:
             head_node_stub = bookstore_pb2_grpc.DataStoreStub(grpc.insecure_channel(f"localhost:{request.head_node_port}"))
@@ -65,7 +65,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
     
     def DeclareHead(self, request, context):
         self.head = True
-        print(f"Head node declared at port {self.port}")
+        #print(f"Head node declared at port {self.port}")
         self.successor.SetHeadNode(bookstore_pb2.SetHeadNodeRequest(head_node_port=self.port))
         return bookstore_pb2.DeclareHeadResponse(success = True)
     
@@ -112,7 +112,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
             if not self.tail:
                 Timer(self.timeout, self._propagate_write, [request]).start()
             if self.tail:
-                print(f"Update to {request.book_name} propagated to tail")
+                #print(f"Update to {request.book_name} propagated to tail")
                 try:
                     response = self.successor.ConfirmTransaction(bookstore_pb2.ConfirmTransactionRequest(book_name=request.book_name))
                     success = response.success
@@ -214,8 +214,8 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
             response = stub.DeleteData(bookstore_pb2.DeleteDataRequest())
             if not response.success:
                 return bookstore_pb2.CreateChainResponse(success=False, message="Error removing chain")
-            else:
-                print("Data deleted successfully")
+            #else:
+            #    print("Data deleted successfully")
 
         with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
             stub = bookstore_pb2_grpc.DataStoreStub(channel)
@@ -231,8 +231,7 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
 
     def CreateChain(self, request, context):
         if self.chain:
-            #TODO: Implement chain re-creation
-            return bookstore_pb2.CreateChainResponse(success=False, message="Chain already exists. Use RemoveHead to remove the current head.")
+            return bookstore_pb2.CreateChainResponse(success=False, message="Chain already exists. Use Remove-head to remove the current head.")
         
         datastores = self.local_datastores.copy()
         for node_id in self.other_nodes:
@@ -251,20 +250,20 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
                 response = stub.SetSuccessor(bookstore_pb2.SetSuccessorRequest(successor=int(successor)))
 
             self.chain.append(successor)
-            print(f"Successor of {self.chain[-2]} is {self.chain[-1]}")
+            #print(f"Successor of {self.chain[-2]} is {self.chain[-1]}")
 
         with grpc.insecure_channel(f"localhost:{self.chain[-1]}") as channel:
-            print(f"Setting head as successor of tail")
+            #print(f"Setting head as successor of tail")
             stub = bookstore_pb2_grpc.DataStoreStub(channel)
             response = stub.SetSuccessor(bookstore_pb2.SetSuccessorRequest(successor=self.chain[0]))
             
         with grpc.insecure_channel(f"localhost:{self.chain[-1]}") as channel:
-            print(f"Setting {self.chain[-1]} as tail")
+            #print(f"Setting {self.chain[-1]} as tail")
             stub = bookstore_pb2_grpc.DataStoreStub(channel)
             response = stub.DeclareTail(bookstore_pb2.DeclareTailRequest())
 
         with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel:
-            print(f"Setting {self.chain[0]} as head")
+            #print(f"Setting {self.chain[0]} as head")
             stub = bookstore_pb2_grpc.DataStoreStub(channel)
             response = stub.DeclareHead(bookstore_pb2.DeclareHeadRequest())
         
@@ -349,10 +348,6 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
                     response = stub.SetChain(bookstore_pb2.SetChainRequest(chain=self.chain))
         return self.ListChain(request, context)
 
-    #def RestoreHead(self, request, context):
-    #    # TODO: Implement RestoreHead
-    #    return bookstore_pb2.RestoreHeadResponse(message="Head restored successfully")\
-
     def RestoreHead(self, request, context): 
         if self.last_removed_head is None: 
             return bookstore_pb2.RestoreHeadResponse(success=False, message="No head to restore") 
@@ -396,7 +391,7 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
         return len(head_operations) - deviation + len(chain_operations) - deviation
 
 if __name__ == '__main__':
-    openai.api_key = "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"
+    openai.api_key = "INSERT YOUR API KEY HERE"
     
     while True:
         try:
@@ -422,7 +417,7 @@ if __name__ == '__main__':
     bookstore_pb2_grpc.add_BookStoreServicer_to_server(BookStoreService(node_id, other_nodes), server)
     server.add_insecure_port(f"localhost:{master_port}")
     server.start() 
-    print(f"bookstore server started on port {master_port}...")
+    print(f"Bookstore server started on port {master_port}...")
     try:
         while True:
             with grpc.insecure_channel(f"localhost:{master_port}") as channel:
