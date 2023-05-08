@@ -5,6 +5,26 @@ import time
 import bookstore_pb2
 import bookstore_pb2_grpc
 from threading import Timer
+import openai
+
+def generate_book_name(keyword):
+    prompt = (f"Generate a book name based on the keyword '{keyword}'. Name:")
+
+    # Generate book name with GPT-3
+    # If book name is too short or too long, try again
+    book_name = [0]*51
+    while len(book_name) < 5 or len(book_name) > 50:
+        response = openai.Completion.create(
+            engine="text-davinci-002",
+            prompt=prompt,
+            max_tokens=50,
+            n=1,
+            stop=None,
+            temperature=0.5,
+        )
+        book_name = response.choices[0].text.strip()
+
+    return book_name
 
 class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
     def __init__(self, port):
@@ -376,6 +396,8 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
         return len(head_operations) - deviation + len(chain_operations) - deviation
 
 if __name__ == '__main__':
+    openai.api_key = "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"
+    
     while True:
         try:
             node_id = int(input("Enter node id: "))
@@ -452,6 +474,14 @@ if __name__ == '__main__':
                         book_name = " ".join(parts[1:-1])
                         response = stub.WriteOperation(bookstore_pb2.WriteOperationRequest(book_name=book_name, price=price))
                         print(f"{response.book_name} = {response.price} EUR")
+                       
+                    elif parts[0] == "ML-list-recommend":
+                        if len(parts) < 2:
+                            print("Usage: ML-list-recommend <keyword/part of the name/etc>")
+                            continue
+                        keywords = " ".join(parts[1:])
+                        book_name = generate_book_name(keywords)
+                        print(f"I suggest you: {book_name}")
 
                     elif parts[0] == "List-books":
                         response = stub.ListBooks(bookstore_pb2.ListBooksRequest())
