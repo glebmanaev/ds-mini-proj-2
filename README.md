@@ -44,7 +44,9 @@ List-books
 Read-operation <book-name>
 ```
 7. Time-out: This sets the time-out to propagate a write update between processes.
-
+```
+Set-timeout <seconds>
+```
 8. Data-status: This command will list the status of each data item, whether clean or dirty.
 ```
 Data-status
