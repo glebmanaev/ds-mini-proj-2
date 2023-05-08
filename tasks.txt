@@ -1,0 +1,10 @@
+Local-store-ps <k> ✓
+Create-chain ✓ + re-create chain ✓
+List-chain ✓
+Write-operation <"Book", Price> ✓
+List-books ✓
+Read-operation <Book> ✓
+Time-out <timeout> ✓
+Data-status ✓
+Remove-head ✓
+Restore-head ✓
