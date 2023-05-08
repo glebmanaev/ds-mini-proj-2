@@ -16,6 +16,9 @@ Once the gRPC code has been generated, you can start the nodes using the merged.
 ```
 python merged.py
 ```
+Enter the Node ID of your current node.
+
+Enter IDs of other nodes in a distributed deployment, if you are using only one node just press ENTER instead.
 
 The following commands are available:
 
