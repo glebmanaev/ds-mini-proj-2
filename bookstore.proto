@@ -12,6 +12,7 @@ service DataStore {
   rpc DeleteData(DeleteDataRequest) returns (DeleteDataResponse);
   rpc ConfirmWrite(ConfirmWriteRequest) returns (ConfirmWriteResponse);
   rpc WriteOperation(WriteOperationRequest) returns (WriteOperationResponse);
+  rpc UpdateDataStatus(UpdateDataStatusRequest) returns (UpdateDataStatusResponse);
   rpc ConfirmTransaction(ConfirmTransactionRequest) returns (ConfirmTransactionResponse);
   rpc ConfirmRead(ConfirmReadRequest) returns (ConfirmReadResponse);
   rpc ReadOperation(ReadOperationRequest) returns (ReadOperationResponse);
@@ -88,6 +89,15 @@ message WriteOperationResponse {
   string book_name = 1;
   double price = 2;
   bool success = 3;
+}
+
+message UpdateDataStatusRequest {
+  repeated string book_names = 1;
+  repeated string statuses = 2;
+}
+
+message UpdateDataStatusResponse {
+  bool success = 1;
 }
 
 message ConfirmTransactionRequest {
@@ -197,7 +207,8 @@ message RestoreHeadRequest {
 }
 
 message RestoreHeadResponse {
-  string message = 1;
+  bool success = 1;
+  string message = 2;
 }
 
 message GetLocalDataStoresRequest {

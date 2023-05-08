@@ -15,6 +15,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         self.tail = False
         self.timeout = 10
         self.head_node = None
+        self.data_status = {}
         print(f"DataStoreService initialized at port {self.port}")
 
     def SetSuccessor(self, request, context):
@@ -44,7 +45,6 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
     
     def DeclareHead(self, request, context):
         self.head = True
-        self.data_status = {}
         print(f"Head node declared at port {self.port}")
         self.successor.SetHeadNode(bookstore_pb2.SetHeadNodeRequest(head_node_port=self.port))
         return bookstore_pb2.DeclareHeadResponse(success = True)
@@ -63,8 +63,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
     
     def DeleteData(self, request, context):
         self.data = {}
-        if self.head:
-            self.data_status = {}
+        self.data_status = {}
         if not self.tail:
             return self.successor.DeleteData(request)
         return bookstore_pb2.DeleteDataResponse(success = True)
@@ -89,8 +88,7 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
         if self.head or response.success:
             self.data[request.book_name] = request.price
             success = True
-            if self.head:
-                self.data_status[request.book_name] = "dirty"
+            self.data_status[request.book_name] = "dirty"
             if not self.tail:
                 Timer(self.timeout, self._propagate_write, [request]).start()
             if self.tail:
@@ -105,9 +103,22 @@ class DataStoreService(bookstore_pb2_grpc.DataStoreServicer):
             return bookstore_pb2.WriteOperationResponse(book_name=request.book_name, price=request.price, success=success)
         return bookstore_pb2.WriteOperationResponse(book_name=request.book_name, price=request.price, success=False)
     
+    def UpdateDataStatus(self, request, context):
+        data_status = {}
+        for i, book_name in enumerate(request.book_names):
+            self.data_status[book_name] = request.statuses[i]
+        if not self.tail:
+            return self.successor.UpdateDataStatus(request)
+        return bookstore_pb2.UpdateDataStatusResponse(success = True)
+
     def ConfirmTransaction(self, request, context):
         if request.book_name in self.data.keys():
             self.data_status[request.book_name] = "clean"
+            book_names, statuses = [], []
+            for book_name, status in self.data_status.items():
+                book_names.append(book_name)
+                statuses.append(status)
+            self.successor.UpdateDataStatus(bookstore_pb2.UpdateDataStatusRequest(book_names=book_names, statuses=statuses))
             return bookstore_pb2.ConfirmTransactionResponse(success = True)
         return bookstore_pb2.ConfirmTransactionResponse(success = False)
     
@@ -318,9 +329,51 @@ class BookStoreService(bookstore_pb2_grpc.BookStoreServicer):
                     response = stub.SetChain(bookstore_pb2.SetChainRequest(chain=self.chain))
         return self.ListChain(request, context)
 
-    def RestoreHead(self, request, context):
-        # TODO: Implement RestoreHead
-        return bookstore_pb2.RestoreHeadResponse(message="Head restored successfully")
+    #def RestoreHead(self, request, context):
+    #    # TODO: Implement RestoreHead
+    #    return bookstore_pb2.RestoreHeadResponse(message="Head restored successfully")\
+
+    def RestoreHead(self, request, context): 
+        if self.last_removed_head is None: 
+            return bookstore_pb2.RestoreHeadResponse(success=False, message="No head to restore") 
+    
+        order_deviation = self._get_order_deviation() 
+        if order_deviation > 5: 
+            self.last_removed_head = None 
+            return bookstore_pb2.RestoreHeadResponse(success=False, message="Head could not be restored") 
+    
+        with grpc.insecure_channel(f"localhost:{self.last_removed_head}") as channel: 
+            stub = bookstore_pb2_grpc.DataStoreStub(channel) 
+            response = stub.DeclareHead(bookstore_pb2.DeclareHeadRequest()) 
+            if not response.success: 
+                self.last_removed_head = None 
+                return bookstore_pb2.RestoreHeadResponse(success=False, message="Head could not be restored") 
+        
+        self.chain.insert(0, self.last_removed_head) 
+        self.last_removed_head = None 
+        for other_node_id in self.other_nodes: 
+            with grpc.insecure_channel(f"localhost:5{other_node_id:02}00") as channel: 
+                stub = bookstore_pb2_grpc.BookStoreStub(channel) 
+                response = stub.SetChain(bookstore_pb2.SetChainRequest(chain=self.chain)) 
+    
+        return bookstore_pb2.RestoreHeadResponse(success=True, message="Head restored successfully") 
+ 
+    def _get_order_deviation(self): 
+        if not self.chain: 
+            return 0 
+        with grpc.insecure_channel(f"localhost:{self.chain[0]}") as channel: 
+            stub = bookstore_pb2_grpc.DataStoreStub(channel) 
+            response = stub.DataStatus(bookstore_pb2.DataStatusRequest()) 
+        if not response.data_status: 
+            return 0 
+        head_operations = response.data_status
+        chain_operations = [f"{self.node_id}-{i}" for i in range(len(self.chain)-1, -1, -1)] 
+        deviation = 0 
+        while deviation < len(head_operations) and deviation < len(chain_operations): 
+            if head_operations[deviation] != chain_operations[deviation]: 
+                break 
+            deviation += 1 
+        return len(head_operations) - deviation + len(chain_operations) - deviation
 
 if __name__ == '__main__':
     while True:
@@ -444,8 +497,8 @@ if __name__ == '__main__':
                         print(response.chain)
 
                     elif parts[0] == "Restore-head":
-                        # TODO: Implement Restore-head command
-                        print("Command not yet implemented")
+                        response = stub.RestoreHead(bookstore_pb2.RestoreHeadRequest())
+                        print(response.message)
 
                     else:
                         print(f"Unknown command: {parts[0]}")

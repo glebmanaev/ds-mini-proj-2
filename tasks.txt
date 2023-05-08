@@ -6,5 +6,5 @@ List-books ✓
 Read-operation <Book> ✓
 Time-out <timeout> ✓
 Data-status ✓
-Remove-head
-Restore-head
+Remove-head ✓
+Restore-head ✓
